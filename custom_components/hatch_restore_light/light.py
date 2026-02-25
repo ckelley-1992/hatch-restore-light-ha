@@ -114,8 +114,8 @@ class HatchRestoreLightEntity(HatchEntity, LightEntity):
 class HatchRestoreRoutineLightEntity(HatchEntity, LightEntity):
     """Legacy Restore independent light behavior via remote mode."""
 
-    _attr_color_mode = ColorMode.ONOFF
-    _attr_supported_color_modes = {ColorMode.ONOFF}
+    _attr_color_mode = ColorMode.BRIGHTNESS
+    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
     def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
         super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Light")
@@ -124,7 +124,16 @@ class HatchRestoreRoutineLightEntity(HatchEntity, LightEntity):
     def is_on(self) -> bool | None:
         return self.rest_device.is_on
 
+    @property
+    def brightness(self) -> int | None:
+        return int(round((self.rest_device.color_intensity / 65535) * 255))
+
     def turn_on(self, **kwargs) -> None:
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
+        if brightness is not None:
+            brightness_percent = (brightness / 255.0) * 100.0
+            self.rest_device.set_light_brightness_percent(brightness_percent)
+            return
         self.rest_device.set_light_enabled(True)
 
     def turn_off(self, **kwargs) -> None:

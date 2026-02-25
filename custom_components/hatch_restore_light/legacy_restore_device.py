@@ -108,6 +108,48 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
         self._apply_remote_state(color_enabled=self.color_enabled, sound_enabled=enabled)
 
     @property
+    def light_brightness_percent(self) -> float:
+        return round((self.color_intensity / 65535) * 100, 1)
+
+    def set_light_brightness_percent(self, percent: float) -> None:
+        percent = max(0.0, min(100.0, float(percent)))
+        self.color_intensity = int(round((percent / 100.0) * 65535))
+        if self.color_intensity <= 0:
+            self.color_enabled = False
+            self._apply_remote_state(
+                color_enabled=False,
+                sound_enabled=self.sound_enabled,
+            )
+            return
+
+        self.color_enabled = True
+        self._apply_remote_state(
+            color_enabled=True,
+            sound_enabled=self.sound_enabled,
+        )
+
+    def set_color_id(self, color_id: int) -> None:
+        self.color_id = max(0, int(color_id))
+        if self.color_enabled or self.sound_enabled:
+            self._apply_remote_state(
+                color_enabled=self.color_enabled,
+                sound_enabled=self.sound_enabled,
+            )
+            return
+
+        # Persist chosen color id while leaving playback off.
+        self._update(
+            {
+                "content": {"playing": "none", "paused": False, "offset": 0, "step": 0},
+                "color": {
+                    "enabled": False,
+                    "id": self.color_id,
+                    "i": self.color_intensity,
+                },
+            }
+        )
+
+    @property
     def sound_volume_percent(self) -> float:
         return round((self.sound_volume / 65535) * 100, 1)
 
