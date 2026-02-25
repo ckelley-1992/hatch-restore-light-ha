@@ -1,0 +1,18 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hatch Restore Auth",
+        "description": "Enter your Hatch account credentials.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "auth": "Login failed. Try logging out/in via Hatch app and retry."
+    }
+  }
+}
+
