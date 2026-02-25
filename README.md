@@ -10,10 +10,9 @@ Note: this integration is configured to use Hatch's `prod-sleep.hatchbaby.com` A
 - Discovers Hatch devices using a Homebridge-style `iotProducts` query (supports legacy `product=restore`).
 - Creates `light` entities for Restore models.
 - For legacy `product=restore`:
-  - `light` entity toggles light independently and supports brightness (`color.i`) using `content.playing=remote`.
-  - `switch` entity toggles sound independently (`sound.enabled`) using `content.playing=remote`.
-  - `number` entity controls sound volume (0-100%).
-  - `number` entities expose raw `color_id` and `color_intensity` for color selection experiments.
+  - `light` entity combines on/off + brightness controls.
+  - `media_player` entity combines sound on/off + volume controls.
+  - optional advanced `number` entity exposes raw `color_id` for color selection experiments.
 - For IoT Restore models (`restoreIot`/`restoreV4`/`restoreV5`): supports on/off, brightness, and RGBW color.
 
 ## Install
