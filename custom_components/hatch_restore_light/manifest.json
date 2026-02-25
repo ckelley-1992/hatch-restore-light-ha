@@ -7,5 +7,5 @@
   "iot_class": "cloud_push",
   "loggers": ["custom_components.hatch_restore_light", "hatch_rest_api"],
   "requirements": ["hatch_rest_api==1.32.0"],
-  "version": "0.1.7"
+  "version": "0.1.8"
 }

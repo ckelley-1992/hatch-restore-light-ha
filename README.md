@@ -11,6 +11,7 @@ Note: this integration is configured to use Hatch's `prod-sleep.hatchbaby.com` A
 - Creates `light` entities for Restore models.
 - For legacy `product=restore`:
   - `light` entity combines on/off + brightness controls.
+  - `light` sound-level entity combines sound on/off + volume as a dimmer slider (HomeKit-friendly).
   - `media_player` entity combines sound on/off + volume controls.
   - companion `switch` entity mirrors sound on/off for clean Apple Home exposure.
   - optional advanced `number` entity exposes raw `color_id` for color selection experiments.

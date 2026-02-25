@@ -36,6 +36,7 @@ async def async_setup_entry(
     for rest_device in coordinator.rest_devices:
         if isinstance(rest_device, LegacyRestoreDevice):
             entities.append(HatchRestoreRoutineLightEntity(coordinator, rest_device.thing_name))
+            entities.append(HatchRestoreSoundLevelLightEntity(coordinator, rest_device.thing_name))
         elif isinstance(rest_device, (RestoreIot, RestoreV4, RestoreV5)):
             entities.append(HatchRestoreLightEntity(coordinator, rest_device.thing_name))
 
@@ -138,3 +139,30 @@ class HatchRestoreRoutineLightEntity(HatchEntity, LightEntity):
 
     def turn_off(self, **kwargs) -> None:
         self.rest_device.set_light_enabled(False)
+
+
+class HatchRestoreSoundLevelLightEntity(HatchEntity, LightEntity):
+    """Legacy Restore sound exposed as a dimmable light for HomeKit slider UX."""
+
+    _attr_color_mode = ColorMode.BRIGHTNESS
+    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+
+    def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
+        super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Sound Level")
+
+    @property
+    def is_on(self) -> bool | None:
+        return self.rest_device.sound_enabled
+
+    @property
+    def brightness(self) -> int | None:
+        return int(round((self.rest_device.sound_volume / 65535) * 255))
+
+    def turn_on(self, **kwargs) -> None:
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
+        if brightness is not None:
+            self.rest_device.set_sound_volume_percent((brightness / 255.0) * 100.0)
+        self.rest_device.set_sound_enabled(True)
+
+    def turn_off(self, **kwargs) -> None:
+        self.rest_device.set_sound_enabled(False)
