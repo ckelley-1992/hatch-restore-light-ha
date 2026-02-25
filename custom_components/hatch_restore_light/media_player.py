@@ -42,7 +42,7 @@ class HatchRestoreSoundMediaPlayerEntity(HatchEntity, MediaPlayerEntity):
     )
 
     def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
-        super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Sound")
+        super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Sound Media")
 
     @property
     def state(self) -> MediaPlayerState:
@@ -66,4 +66,3 @@ class HatchRestoreSoundMediaPlayerEntity(HatchEntity, MediaPlayerEntity):
 
     def set_volume_level(self, volume: float) -> None:
         self.rest_device.set_sound_volume_percent(volume * 100.0)
-

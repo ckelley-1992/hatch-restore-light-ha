@@ -12,6 +12,7 @@ Note: this integration is configured to use Hatch's `prod-sleep.hatchbaby.com` A
 - For legacy `product=restore`:
   - `light` entity combines on/off + brightness controls.
   - `media_player` entity combines sound on/off + volume controls.
+  - companion `switch` entity mirrors sound on/off for clean Apple Home exposure.
   - optional advanced `number` entity exposes raw `color_id` for color selection experiments.
 - For IoT Restore models (`restoreIot`/`restoreV4`/`restoreV5`): supports on/off, brightness, and RGBW color.
 
@@ -40,7 +41,7 @@ Note: this integration is configured to use Hatch's `prod-sleep.hatchbaby.com` A
 If you use Home Assistant HomeKit Bridge:
 
 1. Go to **Settings -> Devices & Services -> HomeKit Bridge**.
-2. Add/include the created Hatch light entity.
+2. Add/include the created Hatch light entity and the Hatch sound switch entity.
 3. Pair/sync the bridge to Apple Home.
 
-The light should then be controllable directly in Apple Home.
+The light and sound switch should then be controllable directly in Apple Home.
