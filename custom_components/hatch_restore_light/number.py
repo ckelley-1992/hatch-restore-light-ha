@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
@@ -39,6 +39,7 @@ class HatchRestoreSoundVolumeNumberEntity(HatchEntity, NumberEntity):
     _attr_native_max_value = 100
     _attr_native_step = 1
     _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_mode = NumberMode.SLIDER
 
     def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
         super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Sound Volume")
@@ -57,6 +58,7 @@ class HatchRestoreColorIdNumberEntity(HatchEntity, NumberEntity):
     _attr_native_min_value = 0
     _attr_native_max_value = 65535
     _attr_native_step = 1
+    _attr_mode = NumberMode.BOX
 
     def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
         super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Color ID")
@@ -75,6 +77,7 @@ class HatchRestoreColorIntensityNumberEntity(HatchEntity, NumberEntity):
     _attr_native_min_value = 0
     _attr_native_max_value = 65535
     _attr_native_step = 1
+    _attr_mode = NumberMode.SLIDER
 
     def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
         super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Color Intensity")
