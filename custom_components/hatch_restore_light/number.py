@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfPercentage
+from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -36,7 +36,7 @@ class HatchRestoreSoundVolumeNumberEntity(HatchEntity, NumberEntity):
     _attr_native_min_value = 0
     _attr_native_max_value = 100
     _attr_native_step = 1
-    _attr_native_unit_of_measurement = UnitOfPercentage
+    _attr_native_unit_of_measurement = PERCENTAGE
 
     def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
         super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Sound Volume")
@@ -47,4 +47,3 @@ class HatchRestoreSoundVolumeNumberEntity(HatchEntity, NumberEntity):
 
     def set_native_value(self, value: float) -> None:
         self.rest_device.set_sound_volume_percent(value)
-
