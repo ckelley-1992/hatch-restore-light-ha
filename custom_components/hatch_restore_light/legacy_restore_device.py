@@ -18,6 +18,7 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
     sound_enabled: bool = False
     sound_id: int = 10040
     sound_volume: int = 32767
+    last_nonzero_sound_volume: int = 32767
 
     def _update_local_state(self, state):
         if safely_get_json_value(state, "deviceInfo.f") is not None:
@@ -38,6 +39,8 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
             self.sound_id = safely_get_json_value(state, "sound.id", int)
         if safely_get_json_value(state, "sound.v") is not None:
             self.sound_volume = safely_get_json_value(state, "sound.v", int)
+            if self.sound_volume > 0:
+                self.last_nonzero_sound_volume = self.sound_volume
         self.publish_updates()
 
     @property
@@ -99,6 +102,9 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
         self._apply_remote_state(color_enabled=enabled, sound_enabled=self.sound_enabled)
 
     def set_sound_enabled(self, enabled: bool) -> None:
+        if enabled and self.sound_volume <= 0:
+            # Device reports v=0 while disabled; restore last audible volume when enabling.
+            self.sound_volume = self.last_nonzero_sound_volume
         self._apply_remote_state(color_enabled=self.color_enabled, sound_enabled=enabled)
 
     def __repr__(self):
