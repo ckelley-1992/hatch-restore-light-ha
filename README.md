@@ -12,6 +12,7 @@ Note: this integration is configured to use Hatch's `prod-sleep.hatchbaby.com` A
 - For legacy `product=restore`:
   - `light` entity toggles light independently (`color.enabled`) using `content.playing=remote`.
   - `switch` entity toggles sound independently (`sound.enabled`) using `content.playing=remote`.
+  - `number` entity controls sound volume (0-100%).
 - For IoT Restore models (`restoreIot`/`restoreV4`/`restoreV5`): supports on/off, brightness, and RGBW color.
 
 ## Install

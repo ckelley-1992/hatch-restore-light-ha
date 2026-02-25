@@ -107,6 +107,36 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
             self.sound_volume = self.last_nonzero_sound_volume
         self._apply_remote_state(color_enabled=self.color_enabled, sound_enabled=enabled)
 
+    @property
+    def sound_volume_percent(self) -> float:
+        return round((self.sound_volume / 65535) * 100, 1)
+
+    def set_sound_volume_percent(self, percent: float) -> None:
+        percent = max(0.0, min(100.0, float(percent)))
+        raw_volume = int(round((percent / 100.0) * 65535))
+        self.sound_volume = raw_volume
+        if raw_volume > 0:
+            self.last_nonzero_sound_volume = raw_volume
+
+        if self.color_enabled or self.sound_enabled:
+            self._apply_remote_state(
+                color_enabled=self.color_enabled,
+                sound_enabled=self.sound_enabled,
+            )
+            return
+
+        # Keep content stopped while persisting preferred sound settings.
+        self._update(
+            {
+                "content": {"playing": "none", "paused": False, "offset": 0, "step": 0},
+                "sound": {
+                    "enabled": False,
+                    "id": self.sound_id,
+                    "v": self.sound_volume,
+                },
+            }
+        )
+
     def __repr__(self):
         return {
             "device_name": self.device_name,
