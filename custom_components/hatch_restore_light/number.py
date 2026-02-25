@@ -27,6 +27,7 @@ async def async_setup_entry(
         if isinstance(rest_device, LegacyRestoreDevice):
             entities.append(HatchRestoreSoundVolumeNumberEntity(coordinator, rest_device.thing_name))
             entities.append(HatchRestoreColorIdNumberEntity(coordinator, rest_device.thing_name))
+            entities.append(HatchRestoreColorIntensityNumberEntity(coordinator, rest_device.thing_name))
 
     async_add_entities(entities)
 
@@ -66,3 +67,21 @@ class HatchRestoreColorIdNumberEntity(HatchEntity, NumberEntity):
 
     def set_native_value(self, value: float) -> None:
         self.rest_device.set_color_id(int(round(value)))
+
+
+class HatchRestoreColorIntensityNumberEntity(HatchEntity, NumberEntity):
+    """Raw color intensity selector for legacy Restore."""
+
+    _attr_native_min_value = 0
+    _attr_native_max_value = 65535
+    _attr_native_step = 1
+
+    def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
+        super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Color Intensity")
+
+    @property
+    def native_value(self) -> float:
+        return float(self.rest_device.color_intensity)
+
+    def set_native_value(self, value: float) -> None:
+        self.rest_device.set_color_intensity_raw(int(round(value)))

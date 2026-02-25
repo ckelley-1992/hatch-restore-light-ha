@@ -149,6 +149,26 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
             }
         )
 
+    def set_color_intensity_raw(self, raw_value: int) -> None:
+        self.color_intensity = max(0, min(65535, int(raw_value)))
+        if self.color_enabled or self.sound_enabled:
+            self._apply_remote_state(
+                color_enabled=self.color_enabled,
+                sound_enabled=self.sound_enabled,
+            )
+            return
+
+        self._update(
+            {
+                "content": {"playing": "none", "paused": False, "offset": 0, "step": 0},
+                "color": {
+                    "enabled": False,
+                    "id": self.color_id,
+                    "i": self.color_intensity,
+                },
+            }
+        )
+
     @property
     def sound_volume_percent(self) -> float:
         return round((self.sound_volume / 65535) * 100, 1)
