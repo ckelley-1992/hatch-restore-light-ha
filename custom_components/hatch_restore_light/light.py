@@ -123,7 +123,7 @@ class HatchRestoreRoutineLightEntity(HatchEntity, LightEntity):
 
     @property
     def is_on(self) -> bool | None:
-        return self.rest_device.is_on
+        return self.rest_device.is_light_active
 
     @property
     def brightness(self) -> int | None:
@@ -152,7 +152,7 @@ class HatchRestoreSoundLevelLightEntity(HatchEntity, LightEntity):
 
     @property
     def is_on(self) -> bool | None:
-        return self.rest_device.sound_enabled
+        return self.rest_device.is_sound_active
 
     @property
     def brightness(self) -> int | None:

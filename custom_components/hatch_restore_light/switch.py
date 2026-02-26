@@ -25,6 +25,7 @@ async def async_setup_entry(
     for rest_device in coordinator.rest_devices:
         if isinstance(rest_device, LegacyRestoreDevice):
             entities.append(HatchRestoreSoundSwitchEntity(coordinator, rest_device.thing_name))
+            entities.append(HatchRestoreSleepModeSwitchEntity(coordinator, rest_device.thing_name))
 
     async_add_entities(entities)
 
@@ -37,7 +38,7 @@ class HatchRestoreSoundSwitchEntity(HatchEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        return self.rest_device.sound_enabled
+        return self.rest_device.is_sound_active
 
     def turn_on(self, **kwargs) -> None:
         self.rest_device.set_sound_enabled(True)
@@ -45,3 +46,19 @@ class HatchRestoreSoundSwitchEntity(HatchEntity, SwitchEntity):
     def turn_off(self, **kwargs) -> None:
         self.rest_device.set_sound_enabled(False)
 
+
+class HatchRestoreSleepModeSwitchEntity(HatchEntity, SwitchEntity):
+    """Automation-friendly sleep mode switch (routine step 1)."""
+
+    def __init__(self, coordinator: HatchRestoreDataUpdateCoordinator, thing_name: str):
+        super().__init__(coordinator=coordinator, thing_name=thing_name, entity_type="Sleep Mode")
+
+    @property
+    def is_on(self) -> bool | None:
+        return self.rest_device.is_sleep_mode
+
+    def turn_on(self, **kwargs) -> None:
+        self.rest_device.set_sleep_mode(True)
+
+    def turn_off(self, **kwargs) -> None:
+        self.rest_device.set_sleep_mode(False)

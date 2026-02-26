@@ -19,6 +19,7 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
     sound_id: int = 10040
     sound_volume: int = 32767
     last_nonzero_sound_volume: int = 32767
+    active_floor_raw: int = 700  # ~1% of 65535; suppresses ghost "on" states.
 
     def _update_local_state(self, state):
         if safely_get_json_value(state, "deviceInfo.f") is not None:
@@ -45,7 +46,19 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
 
     @property
     def is_on(self) -> bool:
-        return self.color_enabled
+        return self.is_light_active
+
+    @property
+    def is_light_active(self) -> bool:
+        return bool(self.color_enabled and self.color_intensity > self.active_floor_raw)
+
+    @property
+    def is_sound_active(self) -> bool:
+        return bool(self.sound_enabled and self.sound_volume > self.active_floor_raw)
+
+    @property
+    def is_sleep_mode(self) -> bool:
+        return self.current_playing == "routine"
 
     def turn_on_routine(self, step: int = 1) -> None:
         self._update(
@@ -70,6 +83,12 @@ class LegacyRestoreDevice(ShadowClientSubscriberMixin):
                 }
             }
         )
+
+    def set_sleep_mode(self, enabled: bool) -> None:
+        if enabled:
+            self.turn_on_routine(step=1)
+            return
+        self.turn_off()
 
     def _apply_remote_state(self, color_enabled: bool, sound_enabled: bool) -> None:
         if color_enabled or sound_enabled:

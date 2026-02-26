@@ -14,6 +14,8 @@ Note: this integration is configured to use Hatch's `prod-sleep.hatchbaby.com` A
   - `light` sound-level entity combines sound on/off + volume as a dimmer slider (HomeKit-friendly).
   - `media_player` entity combines sound on/off + volume controls.
   - companion `switch` entity mirrors sound on/off for clean Apple Home exposure.
+  - `sleep mode` switch starts/stops routine mode for automation use.
+  - near-zero residual levels are normalized to `off` to avoid ghost `1%` states.
   - optional advanced `number` entity exposes raw `color_id` for color selection experiments.
 - For IoT Restore models (`restoreIot`/`restoreV4`/`restoreV5`): supports on/off, brightness, and RGBW color.
 

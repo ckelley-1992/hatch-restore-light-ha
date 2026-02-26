@@ -46,7 +46,7 @@ class HatchRestoreSoundMediaPlayerEntity(HatchEntity, MediaPlayerEntity):
 
     @property
     def state(self) -> MediaPlayerState:
-        return MediaPlayerState.PLAYING if self.rest_device.sound_enabled else MediaPlayerState.IDLE
+        return MediaPlayerState.PLAYING if self.rest_device.is_sound_active else MediaPlayerState.IDLE
 
     @property
     def volume_level(self) -> float:
