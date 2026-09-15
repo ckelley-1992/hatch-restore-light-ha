@@ -105,6 +105,11 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--set-content-step", type=int, default=None, help="desired.content.step")
     parser.add_argument(
+        "--list-sounds",
+        action="store_true",
+        help="ask Hatch's content endpoint for the Gen 1 sound catalog (id -> title) and exit",
+    )
+    parser.add_argument(
         "--watch-seconds",
         type=float,
         default=0,
@@ -159,6 +164,27 @@ def _pct_to_raw(percent: int) -> int:
     return int(round(max(0, min(100, percent)) / 100 * 65535))
 
 
+async def _list_sounds(api: Hatch, token: str) -> int:
+    """Print whatever ``fetchByProduct`` returns for the legacy product (untested on Gen 1)."""
+    for product in ("restore", "restoreIot"):
+        try:
+            payload = await _retry_rate_limited(
+                lambda: api.content(auth_token=token, product=product, content=["sound"])
+            )
+        except Exception as err:  # noqa: BLE001
+            print(f"product={product}: request failed: {err}")
+            continue
+        items = payload.get("contentItems") if isinstance(payload, dict) else None
+        if not items:
+            print(f"product={product}: no contentItems; raw payload: {json.dumps(payload)[:800]}")
+            continue
+        print(f"product={product}: {len(items)} sounds")
+        for item in sorted(items, key=lambda i: i.get("id", 0)):
+            print(f"  {item.get('id')!s:>6}  {item.get('title') or item.get('name')}")
+        return 0
+    return 1
+
+
 async def _fetch_iot_devices(
     session: ClientSession, auth_token: str, member_products: list[str]
 ) -> list[dict[str, Any]]:
@@ -202,6 +228,9 @@ async def _run(args: argparse.Namespace) -> int:
         member = await _retry_rate_limited(lambda: api.member(auth_token=token))
         member_products = member.get("products", []) if isinstance(member, dict) else []
         print(f"Member products: {member_products}")
+
+        if args.list_sounds:
+            return await _list_sounds(api, token)
 
         devices = await _fetch_iot_devices(session, token, member_products)
         restore_devices = [d for d in devices if d.get("product") == "restore"]

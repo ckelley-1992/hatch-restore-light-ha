@@ -83,10 +83,14 @@ class LegacyRestoreDevice(CallbacksMixin):
         self.color_id: int = DEFAULT_COLOR_ID
         self.color_intensity: int = RAW_MAX // 2
         self.last_nonzero_color_intensity: int = RAW_MAX // 2
+        # Ids seen while the light/sound were actually active. The device reports defaults while
+        # off, so these are what a manual "turn on" should resume with.
+        self.last_active_color_id: int = DEFAULT_COLOR_ID
         self.sound_enabled: bool = False
         self.sound_id: int = DEFAULT_SOUND_ID
         self.sound_volume: int = RAW_MAX // 2
         self.last_nonzero_sound_volume: int = RAW_MAX // 2
+        self.last_active_sound_id: int = DEFAULT_SOUND_ID
         self._setup_callbacks()
 
     # ---------------------------------------------------------------- shadow plumbing
@@ -227,6 +231,10 @@ class LegacyRestoreDevice(CallbacksMixin):
             self.sound_volume = get(state, "sound.v", int)
             if self.sound_volume > ACTIVE_FLOOR_RAW:
                 self.last_nonzero_sound_volume = self.sound_volume
+        if self.is_light_active:
+            self.last_active_color_id = self.color_id
+        if self.is_sound_active:
+            self.last_active_sound_id = self.sound_id
         self.last_reported_at = datetime.now(UTC)
         _LOGGER.debug("%s state: %s", self.device_name, self.as_dict())
         self.publish_updates()
@@ -251,7 +259,13 @@ class LegacyRestoreDevice(CallbacksMixin):
 
     @property
     def is_sleep_mode(self) -> bool:
-        return self.is_in_routine
+        """True while a routine step is in progress.
+
+        Observed on Gen 1: ``content.step`` goes 0 -> 1 -> 2 -> 0 over a night while
+        ``content.playing`` stays ``"routine"`` after the last step ends, so the step - not the
+        mode - is what says the routine is still doing something.
+        """
+        return self.is_in_routine and self.routine_step >= 1
 
     @property
     def light_brightness_percent(self) -> float:
@@ -326,7 +340,8 @@ class LegacyRestoreDevice(CallbacksMixin):
             raw = self.color_intensity
         else:
             raw = self.last_nonzero_color_intensity
-        self._write(color={"enabled": True, "id": self.color_id, "i": raw})
+        color_id = self.color_id if self.is_light_active else self.last_active_color_id
+        self._write(color={"enabled": True, "id": color_id, "i": raw})
 
     def set_sound(self, enabled: bool, volume_pct: float | None = None) -> None:
         """Sound on/off, optionally at a volume. Local state changes only when the device reports."""
@@ -347,10 +362,12 @@ class LegacyRestoreDevice(CallbacksMixin):
         else:
             # Device reports v=0 while disabled; restore the last audible volume when enabling.
             raw = self.last_nonzero_sound_volume
-        self._write(sound={"enabled": True, "id": self.sound_id, "v": raw})
+        sound_id = self.sound_id if self.is_sound_active else self.last_active_sound_id
+        self._write(sound={"enabled": True, "id": sound_id, "v": raw})
 
     def set_color_id(self, color_id: int) -> None:
         color_id = max(0, int(color_id))
+        self.last_active_color_id = color_id
         if self.is_light_active:
             self._write(color={"enabled": True, "id": color_id, "i": self.color_intensity})
         elif self.is_sound_active:
@@ -404,6 +421,8 @@ class LegacyRestoreDevice(CallbacksMixin):
             "sound_id": self.sound_id,
             "sound_volume": self.sound_volume,
             "last_nonzero_sound_volume": self.last_nonzero_sound_volume,
+            "last_active_color_id": self.last_active_color_id,
+            "last_active_sound_id": self.last_active_sound_id,
             "document_version": self.document_version,
             "last_reported_at": self.last_reported_at.isoformat() if self.last_reported_at else None,
         }

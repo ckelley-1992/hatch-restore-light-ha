@@ -13,8 +13,8 @@ upstream library alone does not discover Gen 1 devices.
 | Entity | Apple Home | What it does |
 | --- | --- | --- |
 | `light.<name>_light` | Light (dimmer) | Light on/off + brightness. Inside a routine it changes the light without ending the routine. |
-| `fan.<name>_sound` | Fan (speed slider) | Sound on/off + volume. A *fan* so "turn off the lights" / Good Night scenes leave the sound alone. |
-| `switch.<name>_sleep_mode` | Switch | On = start the Hatch-app routine at step 1. Off = stop everything. |
+| `fan.<name>_sound` | Fan (speed slider) | Sound on/off + volume. A *fan* so "turn off the lights" / Good Night scenes leave the sound alone. Turning it on resumes the last sound that actually played (`last_active_sound_id` attribute); the device reports a default id while idle. |
+| `switch.<name>_sleep_mode` | Switch | On = start the Hatch-app routine at step 1. Off = stop everything. Reads as off when the routine finishes: the device reports `step` 0 → 1 → 2 → 0 over a night while `playing` lingers as `routine`. |
 | `button.<name>_next_routine_step` | Momentary switch | Same as tapping the device: advance the routine one step. |
 | `sensor.<name>_playing` | — (diagnostic) | `none` / `remote` / `routine` |
 | `sensor.<name>_routine_step` | — (diagnostic) | Current routine step. **Your automations trigger on 1 → 2 to notice the tap.** |
@@ -98,9 +98,15 @@ python scripts/hatch_restore_shadow_probe.py --watch-seconds 180   # now tap the
 * Run 3: `step` 2 with light off / sound on → the Next-step button works. Ignored → try
   `ROUTINE_STEP_TWO_PHASE = True`; if that is also ignored, disable the button entity and rely on
   the physical tap.
-* Run 4 (and the morning after): note what `playing`/`step` report when the sound ends; if the
-  device stays in `routine` after step 2 finishes, say so in an issue — `is_sleep_mode` will need
-  to key off the step instead.
+* Run 4: watch the tap. (Confirmed on a real device: `content.step` goes 0 → 1 → 2 → 0 while
+  `playing` stays `routine` after the sound ends; the Sleep mode switch keys off the step.)
+
+Sound ids are opaque numbers (`sound_id` / `last_active_sound_id` attributes on the fan entity).
+`--list-sounds` asks Hatch's content endpoint for a Gen 1 catalog — untested for this product:
+
+```bash
+python scripts/hatch_restore_shadow_probe.py --list-sounds
+```
 
 A longer soak against the cloud proves the credential refresh survives the 1 h expiry:
 

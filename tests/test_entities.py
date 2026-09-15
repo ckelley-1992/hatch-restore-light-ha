@@ -242,3 +242,55 @@ async def test_auth_failure_at_setup_starts_reauth(hass: HomeAssistant, fake_ses
         fake_session_cls.__init__ = original_init
     flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert any(f["context"].get("source") == "reauth" for f in flows)
+
+
+ROUTINE_LINGERING_AFTER_SOUND = {
+    # Observed on Gen 1: step returns to 0 when the routine finishes, playing stays "routine".
+    "content": {"playing": "routine", "paused": False, "offset": 0, "step": 0},
+    "color": {"enabled": False, "id": 229, "i": 0},
+    "sound": {"enabled": False, "id": 10040, "v": 0},
+}
+
+
+async def test_sleep_mode_turns_off_when_routine_lingers_after_sound(
+    hass: HomeAssistant, setup_integration
+) -> None:
+    session = setup_integration
+    await _report(hass, session, ROUTINE_STEP2)
+    assert hass.states.get(SWITCH).state == STATE_ON
+    await _report(hass, session, ROUTINE_LINGERING_AFTER_SOUND)
+    assert hass.states.get(SWITCH).state == STATE_OFF
+    assert hass.states.get(STEP).state == "0"
+    assert hass.states.get(PLAYING).state == "routine"  # raw mode is still reported truthfully
+    assert hass.states.get(FAN).state == STATE_OFF
+
+
+async def test_sleep_mode_stays_on_at_step1_with_light_off(hass: HomeAssistant, setup_integration) -> None:
+    session = setup_integration
+    await _report(hass, session, ROUTINE_STEP1)
+    # Light switched off by hand while the routine waits for the tap: still armed.
+    await _report(hass, session, {"color": {"enabled": False, "i": 0}})
+    assert hass.states.get(LIGHT).state == STATE_OFF
+    assert hass.states.get(SWITCH).state == STATE_ON
+
+
+async def test_manual_sound_on_resumes_last_audible_sound(hass: HomeAssistant, setup_integration) -> None:
+    session = setup_integration
+    # Pink noise (id 10514) played during step 2, then the device went idle reporting a default id.
+    await _report(hass, session, {**ROUTINE_STEP2, "sound": {"enabled": True, "id": 10514, "v": 29490}})
+    await _report(hass, session, {**INITIAL_REPORTED, "sound": {"enabled": False, "id": 10040, "v": 0}})
+    assert hass.states.get(FAN).attributes["sound_id"] == 10040
+    assert hass.states.get(FAN).attributes["last_active_sound_id"] == 10514
+
+    await hass.services.async_call("fan", "turn_on", {"entity_id": FAN}, blocking=True)
+    payload = session.shadow.published[-1]
+    assert payload["sound"] == {"enabled": True, "id": 10514, "v": 29490}
+    assert payload["content"]["playing"] == "remote"
+
+
+async def test_manual_light_on_resumes_last_active_color(hass: HomeAssistant, setup_integration) -> None:
+    session = setup_integration
+    await _report(hass, session, {"color": {"enabled": True, "id": 231, "i": 40000}})
+    await _report(hass, session, {"color": {"enabled": False, "id": 229, "i": 0}})
+    await hass.services.async_call("light", "turn_on", {"entity_id": LIGHT}, blocking=True)
+    assert session.shadow.published[-1]["color"] == {"enabled": True, "id": 231, "i": 40000}

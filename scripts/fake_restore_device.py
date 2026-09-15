@@ -284,9 +284,12 @@ class FakeRestore:
         self._report(delta)
 
     def end_sound(self) -> None:
-        self.log("[device] step 2 sound finished -> routine ends")
+        """Real Gen 1 behaviour: step returns to 0 but content.playing stays "routine"."""
+        self.log("[device] step 2 sound finished -> step 0, still reporting playing=routine")
         self._cancel_timers()
-        self._report(self._set_all_off())
+        self.state["content"]["step"] = 0
+        self.state["sound"].update({"enabled": False, "v": 0})
+        self._report({"content": dict(self.state["content"]), "sound": dict(self.state["sound"])})
 
     def drop_connection(self, seconds: float = 5.0) -> None:
         if self.conn is None:

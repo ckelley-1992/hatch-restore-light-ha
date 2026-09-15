@@ -53,6 +53,11 @@ class HatchLegacyRestoreLightEntity(HatchEntity, LightEntity):
         return self.rest_device.is_light_active
 
     @property
+    def extra_state_attributes(self) -> dict[str, int]:
+        device = self.rest_device
+        return {"color_id": device.color_id, "last_active_color_id": device.last_active_color_id}
+
+    @property
     def brightness(self) -> int:
         return int(round(self.rest_device.color_intensity / 65535 * 255))
 

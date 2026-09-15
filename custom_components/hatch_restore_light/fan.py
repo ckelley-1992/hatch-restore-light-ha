@@ -48,6 +48,11 @@ class HatchLegacyRestoreSoundFanEntity(HatchEntity, FanEntity):
         return self.rest_device.is_sound_active
 
     @property
+    def extra_state_attributes(self) -> dict[str, int]:
+        device = self.rest_device
+        return {"sound_id": device.sound_id, "last_active_sound_id": device.last_active_sound_id}
+
+    @property
     def percentage(self) -> int:
         if not self.rest_device.is_sound_active:
             return 0
