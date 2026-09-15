@@ -38,6 +38,7 @@ from .const import (
     ROUTINE_STEP_TWO_PHASE_DELAY_S,
 )
 from .errors import HatchCloudError, HatchNotReadyError, NotInRoutineError
+from .sounds import RESTORE_SLEEP_SOUNDS, sound_title
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,6 +92,8 @@ class LegacyRestoreDevice(CallbacksMixin):
         self.sound_volume: int = RAW_MAX // 2
         self.last_nonzero_sound_volume: int = RAW_MAX // 2
         self.last_active_sound_id: int = DEFAULT_SOUND_ID
+        # id -> title of selectable sleep sounds; replaced by the live catalog when it arrives.
+        self.sound_catalog: dict[int, str] = dict(RESTORE_SLEEP_SOUNDS)
         self._setup_callbacks()
 
     # ---------------------------------------------------------------- shadow plumbing
@@ -268,6 +271,20 @@ class LegacyRestoreDevice(CallbacksMixin):
         return self.is_in_routine and self.routine_step >= 1
 
     @property
+    def selected_sound_id(self) -> int:
+        """The sound that is playing, or the one the next "on" will play."""
+        return self.sound_id if self.is_sound_active else self.last_active_sound_id
+
+    @property
+    def selected_sound_title(self) -> str | None:
+        return sound_title(self.selected_sound_id, self.sound_catalog)
+
+    def set_sound_catalog(self, catalog: dict[int, str]) -> None:
+        if catalog and catalog != self.sound_catalog:
+            self.sound_catalog = dict(catalog)
+            self.publish_updates()
+
+    @property
     def light_brightness_percent(self) -> float:
         return _raw_to_pct(self.color_intensity)
 
@@ -365,6 +382,15 @@ class LegacyRestoreDevice(CallbacksMixin):
         sound_id = self.sound_id if self.is_sound_active else self.last_active_sound_id
         self._write(sound={"enabled": True, "id": sound_id, "v": raw})
 
+    def select_sound(self, sound_id: int) -> None:
+        """Choose a sound: switch immediately if playing, otherwise remember it for the next "on"."""
+        sound_id = int(sound_id)
+        self.last_active_sound_id = sound_id
+        if self.is_sound_active:
+            self._write(sound={"enabled": True, "id": sound_id, "v": self.sound_volume})
+        else:
+            self.publish_updates()
+
     def set_color_id(self, color_id: int) -> None:
         color_id = max(0, int(color_id))
         self.last_active_color_id = color_id
@@ -423,6 +449,7 @@ class LegacyRestoreDevice(CallbacksMixin):
             "last_nonzero_sound_volume": self.last_nonzero_sound_volume,
             "last_active_color_id": self.last_active_color_id,
             "last_active_sound_id": self.last_active_sound_id,
+            "selected_sound_title": self.selected_sound_title,
             "document_version": self.document_version,
             "last_reported_at": self.last_reported_at.isoformat() if self.last_reported_at else None,
         }

@@ -171,6 +171,8 @@ class HatchCloudSession:
         self._refresh_task: asyncio.Task | None = None
         self._rebuild_task: asyncio.Task | None = None
         self._resume_task: asyncio.Task | None = None
+        self._catalog_task: asyncio.Task | None = None
+        self.sound_catalog: dict[int, str] = {}
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -204,12 +206,13 @@ class HatchCloudSession:
 
         if self._uses_cloud:
             self._refresh_task = self._loop.create_task(self._credential_refresh_loop())
+            self._catalog_task = self._loop.create_task(self._async_load_sound_catalog())
         self._set_health(True, "connected")
 
     async def async_stop(self) -> None:
         self._stopping = True
         self._cancel_timers()
-        for task in (self._refresh_task, self._rebuild_task, self._resume_task):
+        for task in (self._refresh_task, self._rebuild_task, self._resume_task, self._catalog_task):
             await self._async_cancel(task)
         for device in self.devices:
             if isinstance(device, LegacyRestoreDevice):
@@ -293,6 +296,40 @@ class HatchCloudSession:
             [(d.get("name"), d.get("product"), d.get("thingName")) for d in devices],
         )
         return devices
+
+    async def _async_load_sound_catalog(self) -> None:
+        """Fetch the Gen 1 sound list once; failures leave the built-in table in place."""
+        legacy = [d for d in self.devices if isinstance(d, LegacyRestoreDevice)]
+        if not legacy:
+            return
+        try:
+            payload = await self._api.content(
+                auth_token=self._auth_token, product="restore", content=["sound"]
+            )
+        except (RateError, ClientError, TimeoutError, KeyError) as err:
+            _LOGGER.debug("Hatch sound catalog unavailable (%s); using built-in table", err)
+            return
+        items = payload.get("contentItems") if isinstance(payload, dict) else None
+        catalog: dict[int, str] = {}
+        for item in sorted(items or [], key=lambda i: (i.get("displayOrder") or 0, i.get("id") or 0)):
+            if (
+                item.get("contentType") != "sound"
+                or item.get("hidden")
+                or item.get("alarmOnly")
+                or "restore" not in (item.get("products") or [])
+                or not isinstance(item.get("id"), int)
+                or not item.get("title")
+            ):
+                continue
+            title = str(item["title"]).strip()
+            if title not in catalog.values():
+                catalog[item["id"]] = title
+        if not catalog:
+            return
+        self.sound_catalog = catalog
+        _LOGGER.debug("Hatch sound catalog loaded: %d sounds", len(catalog))
+        for device in legacy:
+            device.set_sound_catalog(catalog)
 
     async def async_refresh_credentials(self) -> None:
         """Fetch a fresh Cognito credential set (re-logging in once if the session died)."""

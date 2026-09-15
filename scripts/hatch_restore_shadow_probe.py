@@ -105,9 +105,19 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--set-content-step", type=int, default=None, help="desired.content.step")
     parser.add_argument(
-        "--list-sounds",
-        action="store_true",
-        help="ask Hatch's content endpoint for the Gen 1 sound catalog (id -> title) and exit",
+        "--list-content",
+        nargs="?",
+        const="sound,color",
+        default=None,
+        metavar="TYPES",
+        help="ask Hatch's content endpoint for the Gen 1 catalog (default types: sound,color; "
+        "also windDown) and exit",
+    )
+    parser.add_argument(
+        "--dump-content",
+        default=None,
+        metavar="PATH",
+        help="with --list-content: also write the raw catalog payload as JSON to PATH",
     )
     parser.add_argument(
         "--watch-seconds",
@@ -164,25 +174,37 @@ def _pct_to_raw(percent: int) -> int:
     return int(round(max(0, min(100, percent)) / 100 * 65535))
 
 
-async def _list_sounds(api: Hatch, token: str) -> int:
-    """Print whatever ``fetchByProduct`` returns for the legacy product (untested on Gen 1)."""
+async def _list_content(
+    api: Hatch, token: str, content_types: list[str], dump_path: str | None = None
+) -> int:
+    """Print the ``fetchByProduct`` catalog for the legacy product (sounds + colours)."""
+    ok = False
     for product in ("restore", "restoreIot"):
         try:
             payload = await _retry_rate_limited(
-                lambda: api.content(auth_token=token, product=product, content=["sound"])
+                lambda: api.content(auth_token=token, product=product, content=content_types)
             )
         except Exception as err:  # noqa: BLE001
             print(f"product={product}: request failed: {err}")
             continue
         items = payload.get("contentItems") if isinstance(payload, dict) else None
         if not items:
-            print(f"product={product}: no contentItems; raw payload: {json.dumps(payload)[:800]}")
+            print(f"product={product}: no contentItems; raw payload: {json.dumps(payload)[:1200]}")
             continue
-        print(f"product={product}: {len(items)} sounds")
-        for item in sorted(items, key=lambda i: i.get("id", 0)):
-            print(f"  {item.get('id')!s:>6}  {item.get('title') or item.get('name')}")
-        return 0
-    return 1
+        print(f"product={product}: {len(items)} items")
+        if dump_path:
+            out = Path(dump_path).expanduser().resolve()
+            out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            print(f"Wrote raw catalog to {out}")
+        for item in sorted(items, key=lambda i: (str(i.get("contentType", "")), i.get("id", 0))):
+            extra = {k: v for k, v in item.items() if k not in {"id", "title", "name", "contentType"}}
+            print(
+                f"  {item.get('contentType', '?'):>8} {item.get('id')!s:>6}  "
+                f"{item.get('title') or item.get('name')}  {json.dumps(extra)[:160]}"
+            )
+        ok = True
+        break
+    return 0 if ok else 1
 
 
 async def _fetch_iot_devices(
@@ -229,8 +251,8 @@ async def _run(args: argparse.Namespace) -> int:
         member_products = member.get("products", []) if isinstance(member, dict) else []
         print(f"Member products: {member_products}")
 
-        if args.list_sounds:
-            return await _list_sounds(api, token)
+        if args.list_content:
+            return await _list_content(api, token, args.list_content.split(","), args.dump_content)
 
         devices = await _fetch_iot_devices(session, token, member_products)
         restore_devices = [d for d in devices if d.get("product") == "restore"]

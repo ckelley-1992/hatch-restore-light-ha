@@ -13,9 +13,10 @@ upstream library alone does not discover Gen 1 devices.
 | Entity | Apple Home | What it does |
 | --- | --- | --- |
 | `light.<name>_light` | Light (dimmer) | Light on/off + brightness. Inside a routine it changes the light without ending the routine. |
-| `fan.<name>_sound` | Fan (speed slider) | Sound on/off + volume. A *fan* so "turn off the lights" / Good Night scenes leave the sound alone. Turning it on resumes the last sound that actually played (`last_active_sound_id` attribute); the device reports a default id while idle. |
+| `fan.<name>_sound` | Fan (speed slider) | Sound on/off + volume. A *fan* so "turn off the lights" / Good Night scenes leave the sound alone. Turning it on plays the selected sound track (defaults to the last one that actually played; the device reports Light Rain's id while idle). |
 | `switch.<name>_sleep_mode` | Switch | On = start the Hatch-app routine at step 1. Off = stop everything. Reads as off when the routine finishes: the device reports `step` 0 → 1 → 2 → 0 over a night while `playing` lingers as `routine`. |
 | `button.<name>_next_routine_step` | Momentary switch | Same as tapping the device: advance the routine one step. |
+| `select.<name>_sound_track` | — (HA only) | Pick the sound by name (Pink Noise, Light Rain, Fireplace, …). Switches immediately if sound is playing, otherwise arms the next "on". |
 | `sensor.<name>_playing` | — (diagnostic) | `none` / `remote` / `routine` |
 | `sensor.<name>_routine_step` | — (diagnostic) | Current routine step. **Your automations trigger on 1 → 2 to notice the tap.** |
 | `binary_sensor.<name>_connected` | — (diagnostic) | Device reports as online to Hatch. |
@@ -47,7 +48,8 @@ Requires Home Assistant 2024.11 or newer.
 
 *Settings → Devices & Services → HomeKit Bridge → Configure*: include the **Light**, **Sound**
 (fan) and **Sleep mode** (switch) entities — and **Next routine step** (button) if you want a
-"go to sleep" tile. Leave the diagnostic sensors out. Siri: "set the bedroom sound to 40 %",
+"go to sleep" tile. Leave the diagnostic sensors and the **Sound track** select out (HomeKit would
+render the select as thirty-odd switches). Siri: "set the bedroom sound to 40 %",
 "turn on sleep mode".
 
 ### Upgrading from 0.1.x
@@ -101,12 +103,19 @@ python scripts/hatch_restore_shadow_probe.py --watch-seconds 180   # now tap the
 * Run 4: watch the tap. (Confirmed on a real device: `content.step` goes 0 → 1 → 2 → 0 while
   `playing` stays `routine` after the sound ends; the Sleep mode switch keys off the step.)
 
-Sound ids are opaque numbers (`sound_id` / `last_active_sound_id` attributes on the fan entity).
-`--list-sounds` asks Hatch's content endpoint for a Gen 1 catalog — untested for this product:
+## Sounds
+
+Sound ids are opaque numbers (`sound_id` / `last_active_sound_id` on the fan entity). Hatch's content
+endpoint serves a catalog for Gen 1 (31 sleep sounds, 10 alarm-only, the rest hidden — the five
+"paid" items are breathing-exercise clips, not sounds). The integration fetches it once at startup
+and falls back to the built-in table in `hatch_cloud/sounds.py`, generated with:
 
 ```bash
-python scripts/hatch_restore_shadow_probe.py --list-sounds
+python scripts/hatch_restore_shadow_probe.py --list-content sound --dump-content /tmp/hatch-sounds.json
 ```
+
+Colours are id-only on Gen 1 (`color_id` / `last_active_color_id` on the light); a colour picker is
+not implemented.
 
 A longer soak against the cloud proves the credential refresh survives the 1 h expiry:
 
@@ -131,10 +140,13 @@ flag emulates firmware that ignores bare writes during a routine.
 Unit tests (HA test harness, no network):
 
 ```bash
-uv venv -p 3.12 .venv && VIRTUAL_ENV=.venv uv pip install pytest-homeassistant-custom-component ruff
+uv venv -p 3.12 .venv && VIRTUAL_ENV=.venv uv pip install hatch_rest_api==1.32.0 pytest-homeassistant-custom-component ruff "pycares<5"
 .venv/bin/python -m pytest
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
+
+(`pycares<5` because the `aiodns` release HA 2025.1 pins breaks against pycares 5 — the standalone
+scripts would fail with `Channel.getaddrinfo() takes 3 positional arguments` otherwise.)
 
 ## Troubleshooting
 

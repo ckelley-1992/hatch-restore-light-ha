@@ -294,3 +294,60 @@ async def test_manual_light_on_resumes_last_active_color(hass: HomeAssistant, se
     await _report(hass, session, {"color": {"enabled": False, "id": 229, "i": 0}})
     await hass.services.async_call("light", "turn_on", {"entity_id": LIGHT}, blocking=True)
     assert session.shadow.published[-1]["color"] == {"enabled": True, "id": 231, "i": 40000}
+
+
+SOUND_SELECT = "select.bedroom_hatch_sound_track"
+
+
+async def test_sound_select_lists_catalog_and_tracks_current(hass: HomeAssistant, setup_integration) -> None:
+    session = setup_integration
+    state = hass.states.get(SOUND_SELECT)
+    assert state is not None
+    assert "Pink Noise" in state.attributes["options"]
+    assert "Beep Beep" not in state.attributes["options"]  # alarm-only sounds are not sleep sounds
+    assert state.state == "Light Rain"  # idle default id 10040
+
+    await _report(hass, session, {**ROUTINE_STEP2, "sound": {"enabled": True, "id": 10036, "v": 29490}})
+    assert hass.states.get(SOUND_SELECT).state == "Pink Noise"
+    # Back to idle: the device reports its default id, but the selection remembers what played.
+    await _report(hass, session, {**INITIAL_REPORTED, "sound": {"enabled": False, "id": 10040, "v": 0}})
+    assert hass.states.get(SOUND_SELECT).state == "Pink Noise"
+    assert hass.states.get(SOUND_SELECT).attributes["sound_id"] == 10036
+
+
+async def test_sound_select_switches_immediately_when_playing(hass: HomeAssistant, setup_integration) -> None:
+    session = setup_integration
+    await _report(
+        hass, session, {"content": {"playing": "remote"}, "sound": {"enabled": True, "id": 10040, "v": 26214}}
+    )
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": SOUND_SELECT, "option": "Fireplace"}, blocking=True
+    )
+    assert session.shadow.published[-1]["sound"] == {"enabled": True, "id": 10086, "v": 26214}
+
+
+async def test_sound_select_while_off_only_arms_next_on(hass: HomeAssistant, setup_integration) -> None:
+    session = setup_integration
+    before = len(session.shadow.published)
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": SOUND_SELECT, "option": "Soft White Noise"}, blocking=True
+    )
+    assert len(session.shadow.published) == before  # nothing sent while off
+    assert hass.states.get(SOUND_SELECT).state == "Soft White Noise"
+
+    await hass.services.async_call("fan", "turn_on", {"entity_id": FAN}, blocking=True)
+    assert session.shadow.published[-1]["sound"]["id"] == 10034
+
+
+async def test_sound_select_unknown_option_errors(hass: HomeAssistant, setup_integration) -> None:
+    with pytest.raises((HomeAssistantError, ValueError)):
+        await hass.services.async_call(
+            "select", "select_option", {"entity_id": SOUND_SELECT, "option": "Not A Sound"}, blocking=True
+        )
+
+
+async def test_live_catalog_replaces_options(hass: HomeAssistant, setup_integration) -> None:
+    session = setup_integration
+    session.device.set_sound_catalog({10036: "Pink Noise", 99999: "Brand New Sound"})
+    await hass.async_block_till_done()
+    assert hass.states.get(SOUND_SELECT).attributes["options"] == ["Pink Noise", "Brand New Sound"]

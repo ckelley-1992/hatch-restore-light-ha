@@ -41,6 +41,9 @@
     "button": {
       "next_routine_step": { "name": "Next routine step" }
     },
+    "select": {
+      "sound_track": { "name": "Sound track" }
+    },
     "sensor": {
       "playing": {
         "name": "Playing",
