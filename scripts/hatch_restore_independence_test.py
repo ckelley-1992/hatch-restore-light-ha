@@ -187,7 +187,7 @@ async def _run(args: argparse.Namespace) -> int:
                     credentials_provider=provider,
                     keep_alive_secs=30,
                     client_bootstrap=bootstrap,
-                    endpoint=aws_token["endpoint"].lstrip("https://"),
+                    endpoint=aws_token["endpoint"].removeprefix("https://"),
                     client_id=f"hatch_independence/{safe_email}/{str(uuid4())}",
                 ),
             )
@@ -277,9 +277,15 @@ async def _run(args: argparse.Namespace) -> int:
             print("Final cleanup state:", json.dumps(_state_summary(final_state), indent=2))
 
             print("\nInterpretation guide:")
-            print("- If `color.enabled` changes while `sound.enabled`/`content.playing` do not, light can be independent.")
-            print("- If `sound.enabled` changes while `color.enabled`/`content.playing` do not, sound can be independent.")
-            print("- If only `content.playing` reliably changes, device is routine/content-coupled (Homebridge behavior).")
+            print(
+                "- If `color.enabled` changes while `sound.enabled`/`content.playing` do not, light can be independent."
+            )
+            print(
+                "- If `sound.enabled` changes while `color.enabled`/`content.playing` do not, sound can be independent."
+            )
+            print(
+                "- If only `content.playing` reliably changes, device is routine/content-coupled (Homebridge behavior)."
+            )
             return 0
     finally:
         if mqtt_connection is not None:

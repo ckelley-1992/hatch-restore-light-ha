@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
-"""Probe Hatch Restore (legacy `product=restore`) device shadow state."""
+"""Probe / poke the Hatch Restore Gen 1 (legacy ``product=restore``) device shadow.
+
+Read-only by default (prints the reported document). Optional writes publish a single desired
+update built from the ``--set-*`` flags, and ``--watch-seconds N`` keeps printing timestamped
+diffs of the reported state for N seconds afterwards (tap the device, watch what changes).
+
+The experiment that settles how the integration should write during a routine::
+
+    # 1. start the Hatch-app routine at step 1 and watch it settle
+    hatch_restore_shadow_probe.py --set-content-playing routine --set-content-step 1 --watch-seconds 20
+    # 2. partial write while in routine: does color.i change with playing still "routine"?
+    hatch_restore_shadow_probe.py --set-color-enabled on --set-color-intensity 20 --watch-seconds 20
+    # 3. advance to step 2 without tapping: does the device go light-off / sound-on?
+    hatch_restore_shadow_probe.py --set-content-playing routine --set-content-step 2 --watch-seconds 30
+    # 4. watch the physical tap / end of sound
+    hatch_restore_shadow_probe.py --watch-seconds 180
+"""
 
 from __future__ import annotations
 
@@ -10,6 +26,7 @@ import json
 import os
 from pathlib import Path
 import threading
+import time
 from typing import Any
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -21,9 +38,9 @@ from awsiot import iotshadow
 from awsiot.iotshadow import IotShadowClient
 from awsiot.mqtt_connection_builder import websockets_with_default_aws_signing
 from hatch_rest_api import Hatch
+from hatch_rest_api import hatch as hatch_module
 from hatch_rest_api.aws_http import AwsHttp
 from hatch_rest_api.errors import RateError
-from hatch_rest_api import hatch as hatch_module
 
 API_BASE = "https://prod-sleep.hatchbaby.com/"
 KNOWN_PRODUCTS = [
@@ -40,9 +57,7 @@ KNOWN_PRODUCTS = [
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Inspect raw AWS IoT shadow for Hatch Restore devices."
-    )
+    parser = argparse.ArgumentParser(description="Inspect raw AWS IoT shadow for Hatch Restore devices.")
     parser.add_argument("--email", default=os.getenv("HATCH_EMAIL"), help="Hatch account email.")
     parser.add_argument(
         "--password",
@@ -69,13 +84,31 @@ def _parse_args() -> argparse.Namespace:
         "--set-color-intensity",
         type=int,
         default=None,
-        help="Optional experimental write: desired.color.i (0-100 percent).",
+        help="Optional experimental write: desired.color.i as 0-100 percent (sent as raw 0-65535).",
     )
     parser.add_argument(
         "--set-color-enabled",
         choices=["on", "off"],
         default=None,
         help="Optional experimental write: desired.color.enabled true/false.",
+    )
+    parser.add_argument(
+        "--set-sound-enabled", choices=["on", "off"], default=None, help="desired.sound.enabled"
+    )
+    parser.add_argument("--set-sound-volume", type=int, default=None, help="desired.sound.v (0-100 percent)")
+    parser.add_argument("--set-sound-id", type=int, default=None, help="desired.sound.id")
+    parser.add_argument(
+        "--set-content-playing",
+        choices=["none", "remote", "routine"],
+        default=None,
+        help="desired.content.playing (sent with paused=false, offset=0)",
+    )
+    parser.add_argument("--set-content-step", type=int, default=None, help="desired.content.step")
+    parser.add_argument(
+        "--watch-seconds",
+        type=float,
+        default=0,
+        help="after any write, keep printing reported-state diffs for this many seconds",
     )
     args = parser.parse_args()
     if not args.email:
@@ -98,7 +131,37 @@ async def _retry_rate_limited(coro_factory, attempts: int = 5):
             wait_s *= 2
 
 
-async def _fetch_iot_devices(session: ClientSession, auth_token: str, member_products: list[str]) -> list[dict[str, Any]]:
+SUMMARY_PATHS = (
+    "connected",
+    "content.playing",
+    "content.step",
+    "color.enabled",
+    "color.id",
+    "color.i",
+    "sound.enabled",
+    "sound.id",
+    "sound.v",
+)
+
+
+def _summarize(reported: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    for path in SUMMARY_PATHS:
+        node: Any = reported
+        for key in path.split("."):
+            node = node.get(key) if isinstance(node, dict) else None
+        if node is not None:
+            summary[path] = node
+    return summary
+
+
+def _pct_to_raw(percent: int) -> int:
+    return int(round(max(0, min(100, percent)) / 100 * 65535))
+
+
+async def _fetch_iot_devices(
+    session: ClientSession, auth_token: str, member_products: list[str]
+) -> list[dict[str, Any]]:
     products = list(dict.fromkeys(KNOWN_PRODUCTS + member_products))
     query = urlencode([("iotProducts", product) for product in products])
     url = f"{API_BASE}service/app/iotDevice/v2/fetch?{query}"
@@ -123,7 +186,7 @@ def _connect_mqtt(endpoint: str, region: str, credentials: dict[str, Any], email
         credentials_provider=provider,
         keep_alive_secs=30,
         client_bootstrap=bootstrap,
-        endpoint=endpoint.lstrip("https://"),
+        endpoint=endpoint.removeprefix("https://"),
         client_id=f"hatch_shadow_probe/{safe_email}/{uuid4()}",
     )
 
@@ -197,9 +260,23 @@ async def _run(args: argparse.Namespace) -> int:
             get_payload["full_response"] = str(response)
             get_event.set()
 
+        tracked: dict[str, Any] = {}
+
         def on_update_shadow_accepted(response: iotshadow.UpdateShadowResponse):
             get_payload["last_update_version"] = response.version
-            get_payload["last_update_state"] = response.state.reported if response.state else {}
+            reported_delta = response.state.reported if response.state else None
+            desired_echo = response.state.desired if response.state else None
+            stamp = time.strftime("%H:%M:%S")
+            if reported_delta:
+                get_payload["last_update_state"] = reported_delta
+                new_summary = _summarize(reported_delta)
+                changes = {k: v for k, v in new_summary.items() if tracked.get(k) != v}
+                tracked.update(new_summary)
+                print(f"{stamp} reported v{response.version}: {json.dumps(changes)}", flush=True)
+            elif desired_echo:
+                print(
+                    f"{stamp} desired  v{response.version} accepted: {json.dumps(desired_echo)}", flush=True
+                )
             update_event.set()
 
         shadow_client.subscribe_to_get_shadow_accepted(
@@ -235,33 +312,55 @@ async def _run(args: argparse.Namespace) -> int:
             dump_path.write_text(json.dumps(reported, indent=2), encoding="utf-8")
             print(f"Wrote reported shadow to {dump_path}")
 
-        has_updates = (
-            args.set_color_id is not None
-            or args.set_color_intensity is not None
-            or args.set_color_enabled is not None
-        )
-        if has_updates:
-            desired_color: dict[str, Any] = {}
-            if args.set_color_id is not None:
-                desired_color["id"] = args.set_color_id
-            if args.set_color_intensity is not None:
-                desired_color["i"] = max(0, min(100, args.set_color_intensity))
-            if args.set_color_enabled is not None:
-                desired_color["enabled"] = args.set_color_enabled == "on"
+        if isinstance(reported, dict):
+            tracked.update(_summarize(reported))
+            print(f"Summary: {json.dumps(tracked)}")
 
-            print(f"Publishing desired color update: {desired_color}")
+        desired: dict[str, Any] = {}
+        desired_color: dict[str, Any] = {}
+        if args.set_color_id is not None:
+            desired_color["id"] = args.set_color_id
+        if args.set_color_intensity is not None:
+            desired_color["i"] = _pct_to_raw(args.set_color_intensity)
+        if args.set_color_enabled is not None:
+            desired_color["enabled"] = args.set_color_enabled == "on"
+        if desired_color:
+            desired["color"] = desired_color
+        desired_sound: dict[str, Any] = {}
+        if args.set_sound_id is not None:
+            desired_sound["id"] = args.set_sound_id
+        if args.set_sound_volume is not None:
+            desired_sound["v"] = _pct_to_raw(args.set_sound_volume)
+        if args.set_sound_enabled is not None:
+            desired_sound["enabled"] = args.set_sound_enabled == "on"
+        if desired_sound:
+            desired["sound"] = desired_sound
+        if args.set_content_playing is not None or args.set_content_step is not None:
+            playing = args.set_content_playing or tracked.get("content.playing", "none")
+            step = (
+                args.set_content_step
+                if args.set_content_step is not None
+                else (1 if playing == "routine" else 0)
+            )
+            desired["content"] = {"playing": playing, "paused": False, "offset": 0, "step": step}
+
+        if desired:
+            print(f"Publishing desired update: {json.dumps(desired)}")
+            update_event.clear()
             shadow_client.publish_update_shadow(
                 iotshadow.UpdateShadowRequest(
                     thing_name=target["thingName"],
-                    state=iotshadow.ShadowState(desired={"color": desired_color}),
+                    state=iotshadow.ShadowState(desired=desired),
                 ),
                 mqtt.QoS.AT_LEAST_ONCE,
-            ).result()
-
-            if await asyncio.to_thread(update_event.wait, 8):
-                print(f"Update acknowledged. Version={get_payload.get('last_update_version')}")
-            else:
+            ).result(timeout=10)
+            if not await asyncio.to_thread(update_event.wait, 8):
                 print("No update acknowledgement received before timeout.")
+
+        if args.watch_seconds > 0:
+            print(f"Watching reported state for {args.watch_seconds:.0f}s (tap the device now)...")
+            await asyncio.sleep(args.watch_seconds)
+            print(f"Final summary: {json.dumps(tracked)}")
 
     if mqtt_connection is not None:
         try:
@@ -284,4 +383,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

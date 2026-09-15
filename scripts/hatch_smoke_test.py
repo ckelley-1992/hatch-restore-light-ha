@@ -8,8 +8,8 @@ import asyncio
 from dataclasses import dataclass
 import getpass
 import os
-from urllib.parse import urlencode
 from typing import Any
+from urllib.parse import urlencode
 
 try:
     from aiohttp import ClientSession
@@ -120,12 +120,8 @@ async def _run(opts: TestOptions) -> int:
                 if base == "https://prod-sleep.hatchbaby.com/":
                     prod_sleep_token = token
                 print("  Login success.")
-                member = await _call_with_rate_limit_retry(
-                    lambda: api.member(auth_token=token)
-                )
-                devices = await _call_with_rate_limit_retry(
-                    lambda: api.iot_devices(auth_token=token)
-                )
+                member = await _call_with_rate_limit_retry(lambda: api.member(auth_token=token))
+                devices = await _call_with_rate_limit_retry(lambda: api.iot_devices(auth_token=token))
                 member_products = member.get("products", []) if isinstance(member, dict) else []
                 print(
                     "  Member context: "
@@ -156,7 +152,11 @@ async def _run(opts: TestOptions) -> int:
             if not prod_sleep_token:
                 print("Could not obtain a prod-sleep auth token for Homebridge-style query.")
                 return 1
-            all_products = list(dict.fromkeys(HOMEBRIDGE_KNOWN_PRODUCTS + (last_member.get("products", []) if last_member else [])))
+            all_products = list(
+                dict.fromkeys(
+                    HOMEBRIDGE_KNOWN_PRODUCTS + (last_member.get("products", []) if last_member else [])
+                )
+            )
             query = urlencode([("iotProducts", p) for p in all_products])
             iot_url = f"{API_BASES[-1]}service/app/iotDevice/v2/fetch?{query}"
             headers = {"X-HatchBaby-Auth": prod_sleep_token, "USER_AGENT": "hatch_rest_api"}
@@ -189,8 +189,7 @@ async def _run(opts: TestOptions) -> int:
             )
         except RateError:
             print(
-                "Rate limited by Hatch API (429) during deep device bootstrap.\n"
-                "Wait 2-5 minutes, then retry."
+                "Rate limited by Hatch API (429) during deep device bootstrap.\nWait 2-5 minutes, then retry."
             )
             return 1
         except BaseError as err:

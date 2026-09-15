@@ -1,0 +1,82 @@
+# Nightly flow for a Hatch Restore Gen 1 driven by this integration.
+#
+#   22:15  -> start the Hatch-app routine at step 1 (warm-white light)
+#   tap    -> the device advances to step 2 (light off, pink noise); HA sees routine_step 1 -> 2
+#             and starts a timer for the configured number of hours
+#   timer  -> stop the routine (light + sound off). The Hatch app's own step-2 duration (540 min)
+#             still runs on the device; whichever ends first wins.
+#
+# Replace `bedroom_hatch` with your device's slug (Settings -> Devices & Services -> Hatch).
+# Paste the helpers into configuration.yaml (or create them in the UI) and the automations into
+# automations.yaml. The 22:15 trigger can instead stay in Apple Home, pointed at the Sleep Mode
+# switch; the rest of the flow works either way.
+
+input_number:
+  hatch_sound_hours:
+    name: Hatch sound duration
+    min: 0.5
+    max: 12
+    step: 0.25
+    initial: 9
+    unit_of_measurement: h
+    mode: box
+
+timer:
+  hatch_sound_off:
+    name: Hatch sound off
+    restore: true   # survives an HA restart mid-night
+
+automation:
+  - alias: "Hatch - start sleep mode"
+    description: "Step 1 of the bedtime routine: warm-white light on until the device is tapped."
+    triggers:
+      - trigger: time
+        at: "22:15:00"
+    actions:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.bedroom_hatch_sleep_mode
+
+  - alias: "Hatch - tap starts the sound timer"
+    description: "Fires on the physical tap (or the Next routine step button): routine step 1 -> 2."
+    triggers:
+      - trigger: state
+        entity_id: sensor.bedroom_hatch_routine_step
+        from: "1"
+        to: "2"
+    conditions:
+      - condition: state
+        entity_id: switch.bedroom_hatch_sleep_mode
+        state: "on"
+    actions:
+      - action: timer.start
+        target:
+          entity_id: timer.hatch_sound_off
+        data:
+          duration: "{{ (states('input_number.hatch_sound_hours') | float(9) * 3600) | int }}"
+
+  - alias: "Hatch - sound timer finished"
+    triggers:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.hatch_sound_off
+    actions:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.bedroom_hatch_sleep_mode
+
+  - alias: "Hatch - routine ended elsewhere cancels the timer"
+    description: "Device finished on its own, or someone stopped it from Apple Home / the Hatch app."
+    triggers:
+      - trigger: state
+        entity_id: switch.bedroom_hatch_sleep_mode
+        to: "off"
+    actions:
+      - action: timer.cancel
+        target:
+          entity_id: timer.hatch_sound_off
+
+  # Optional: let Apple Home (or a bedside button) do what the tap does.
+  # Expose button.bedroom_hatch_next_routine_step through HomeKit Bridge and it appears as a
+  # momentary switch; pressing it moves the routine to step 2, which the automation above picks up.

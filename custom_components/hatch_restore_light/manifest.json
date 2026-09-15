@@ -1,11 +1,13 @@
 {
   "domain": "hatch_restore_light",
   "name": "Hatch Restore Light",
-  "codeowners": ["@ckelley"],
+  "codeowners": ["@ckelley-1992"],
   "config_flow": true,
-  "documentation": "https://github.com/dahlb/ha_hatch",
+  "documentation": "https://github.com/ckelley-1992/hatch-restore-light-ha",
+  "integration_type": "hub",
   "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/ckelley-1992/hatch-restore-light-ha/issues",
   "loggers": ["custom_components.hatch_restore_light", "hatch_rest_api"],
   "requirements": ["hatch_rest_api==1.32.0"],
-  "version": "0.1.9"
+  "version": "0.2.0"
 }

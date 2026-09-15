@@ -2,17 +2,61 @@
   "config": {
     "step": {
       "user": {
-        "title": "Hatch Restore Auth",
+        "title": "Hatch account",
         "description": "Enter your Hatch account credentials.",
         "data": {
           "email": "Email",
           "password": "Password"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Hatch",
+        "description": "The stored password for {email} no longer works. Enter the current password.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
-      "auth": "Login failed. Try logging out/in via Hatch app and retry."
+      "invalid_auth": "Login failed. Check the password, or log out and back in via the Hatch app and retry.",
+      "cannot_connect": "Could not reach the Hatch service.",
+      "rate_limited": "Hatch rate-limited the login. Wait a few minutes and retry.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This Hatch account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "entity": {
+    "light": {
+      "light": { "name": "Light" }
+    },
+    "fan": {
+      "sound": { "name": "Sound" }
+    },
+    "switch": {
+      "sleep_mode": { "name": "Sleep mode" }
+    },
+    "button": {
+      "next_routine_step": { "name": "Next routine step" }
+    },
+    "sensor": {
+      "playing": {
+        "name": "Playing",
+        "state": {
+          "none": "Nothing",
+          "remote": "Remote",
+          "routine": "Routine"
+        }
+      },
+      "routine_step": { "name": "Routine step" }
+    },
+    "binary_sensor": {
+      "connected": { "name": "Connected" }
+    },
+    "number": {
+      "color_id": { "name": "Color ID" }
     }
   }
 }
-
